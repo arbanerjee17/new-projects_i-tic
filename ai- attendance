@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nexus — Attendance AI</title>
+<title>Attendance AI</title>
 <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <style>
 :root{--bg:#07100f;--panel:#0d1817;--panel2:#111f1d;--line:#203330;--text:#eef7f4;--muted:#8ba19c;--brand:#54e39b;--danger:#ff6b6b;--warn:#f5c451}
@@ -14,7 +14,7 @@ button,input{font:inherit}.app{display:flex;min-height:100vh}.side{width:235px;b
 <body>
 <div class="app">
 <aside class="side">
-  <div class="brand">NEXUS <b>AI</b></div>
+  <div class="brand">ATTENDANCE<b>AI</b></div>
   <div class="nav">
     <button data-page="dashboard" class="active">⌂ Dashboard</button>
     <button data-page="camera">◉ Live Camera</button>
