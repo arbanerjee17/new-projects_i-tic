@@ -1,0 +1,614 @@
+import processing.serial.*;
+
+// =====================================================
+// USER SETTINGS
+// =====================================================
+
+// ENTER YOUR ESP32-C6 COM PORT HERE
+String COM_PORT = "COM7";
+
+// Must match Serial.begin() in ESP32 code
+int BAUD_RATE = 115200;
+
+// Maximum radar distance
+float MAX_DISTANCE = 100;
+
+// Object detection limit
+float DETECTION_DISTANCE = 100;
+
+
+// =====================================================
+// SERIAL
+// =====================================================
+
+Serial myPort;
+
+
+// =====================================================
+// RADAR VARIABLES
+// =====================================================
+
+float radarRadius;
+
+int currentAngle = 0;
+float currentDistance = MAX_DISTANCE;
+
+boolean objectDetected = false;
+
+ArrayList<PVector> detectedObjects =
+  new ArrayList<PVector>();
+
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+
+  size(1000, 700);
+
+  smooth();
+
+  radarRadius =
+    min(width * 0.43, height * 0.75);
+
+  // -----------------------------------------
+  // CONNECT TO ESP32-C6
+  // -----------------------------------------
+
+  println("Connecting to: " + COM_PORT);
+
+  myPort =
+    new Serial(
+      this,
+      COM_PORT,
+      BAUD_RATE
+    );
+
+  // Read one complete line
+  myPort.bufferUntil('\n');
+
+  background(5, 10, 8);
+}
+
+
+// =====================================================
+// DRAW
+// =====================================================
+
+void draw() {
+
+  background(5, 10, 8);
+
+  drawRadar();
+
+  drawDetectedObjects();
+
+  drawSweepLine();
+
+  if (objectDetected) {
+    drawCurrentObject();
+  }
+
+  drawInformation();
+}
+
+
+// =====================================================
+// RADAR
+// =====================================================
+
+void drawRadar() {
+
+  pushMatrix();
+
+  translate(
+    width / 2,
+    height - 70
+  );
+
+  // Radar circles
+  noFill();
+
+  stroke(70, 255, 50);
+  strokeWeight(2);
+
+  for (int i = 1; i <= 4; i++) {
+
+    float r =
+      radarRadius * i / 4.0;
+
+    arc(
+      0,
+      0,
+      r * 2,
+      r * 2,
+      PI,
+      TWO_PI
+    );
+  }
+
+
+  // Bottom horizontal line
+
+  line(
+    -radarRadius,
+    0,
+    radarRadius,
+    0
+  );
+
+
+  // Angle lines
+
+  stroke(70, 255, 50, 180);
+  strokeWeight(1);
+
+  for (int angle = 0;
+       angle <= 180;
+       angle += 30) {
+
+    float a =
+      radians(180 - angle);
+
+    float x =
+      cos(a) * radarRadius;
+
+    float y =
+      -sin(a) * radarRadius;
+
+    line(
+      0,
+      0,
+      x,
+      y
+    );
+  }
+
+
+  // Center point
+
+  fill(70, 255, 50);
+  noStroke();
+
+  ellipse(
+    0,
+    0,
+    14,
+    14
+  );
+
+
+  // Distance labels
+
+  fill(70, 255, 50);
+
+  textAlign(CENTER);
+  textSize(14);
+
+  for (int i = 1; i <= 4; i++) {
+
+    float distance =
+      MAX_DISTANCE * i / 4.0;
+
+    float r =
+      radarRadius * i / 4.0;
+
+    text(
+      int(distance) + " cm",
+      0,
+      -r + 18
+    );
+  }
+
+
+  // Angle labels
+
+  for (int angle = 0;
+       angle <= 180;
+       angle += 30) {
+
+    float a =
+      radians(180 - angle);
+
+    float x =
+      cos(a) *
+      (radarRadius + 25);
+
+    float y =
+      -sin(a) *
+      (radarRadius + 25);
+
+    text(
+      angle + "°",
+      x,
+      y
+    );
+  }
+
+  popMatrix();
+}
+
+
+// =====================================================
+// SWEEP LINE
+// =====================================================
+
+void drawSweepLine() {
+
+  pushMatrix();
+
+  translate(
+    width / 2,
+    height - 70
+  );
+
+  float a =
+    radians(180 - currentAngle);
+
+  float x =
+    cos(a) * radarRadius;
+
+  float y =
+    -sin(a) * radarRadius;
+
+
+  // Glow
+
+  stroke(
+    70,
+    255,
+    50,
+    40
+  );
+
+  strokeWeight(12);
+
+  line(
+    0,
+    0,
+    x,
+    y
+  );
+
+
+  // Main line
+
+  stroke(
+    70,
+    255,
+    50
+  );
+
+  strokeWeight(3);
+
+  line(
+    0,
+    0,
+    x,
+    y
+  );
+
+  popMatrix();
+}
+
+
+// =====================================================
+// CURRENT OBJECT
+// =====================================================
+
+void drawCurrentObject() {
+
+  pushMatrix();
+
+  translate(
+    width / 2,
+    height - 70
+  );
+
+  float r =
+    map(
+      currentDistance,
+      0,
+      MAX_DISTANCE,
+      0,
+      radarRadius
+    );
+
+  float a =
+    radians(180 - currentAngle);
+
+  float x =
+    cos(a) * r;
+
+  float y =
+    -sin(a) * r;
+
+
+  // Glow
+
+  noStroke();
+
+  for (int i = 30; i > 0; i -= 3) {
+
+    fill(
+      255,
+      70,
+      20,
+      5
+    );
+
+    ellipse(
+      x,
+      y,
+      i,
+      i
+    );
+  }
+
+
+  // Object
+
+  fill(
+    255,
+    80,
+    20
+  );
+
+  ellipse(
+    x,
+    y,
+    12,
+    12
+  );
+
+  popMatrix();
+}
+
+
+// =====================================================
+// OBJECT TRAIL
+// =====================================================
+
+void drawDetectedObjects() {
+
+  pushMatrix();
+
+  translate(
+    width / 2,
+    height - 70
+  );
+
+  noStroke();
+
+  for (int i = 0;
+       i < detectedObjects.size();
+       i++) {
+
+    PVector p =
+      detectedObjects.get(i);
+
+    float size =
+      map(
+        i,
+        0,
+        detectedObjects.size(),
+        3,
+        12
+      );
+
+    fill(
+      255,
+      70,
+      20,
+      80
+    );
+
+    ellipse(
+      p.x,
+      p.y,
+      size,
+      size
+    );
+  }
+
+  popMatrix();
+}
+
+
+// =====================================================
+// INFORMATION
+// =====================================================
+
+void drawInformation() {
+
+  // Title
+
+  fill(
+    70,
+    255,
+    50
+  );
+
+  textAlign(LEFT);
+
+  textSize(24);
+
+  text(
+    "ULTRASONIC RADAR",
+    30,
+    40
+  );
+
+
+  // Angle
+
+  textSize(16);
+
+  text(
+    "Angle: " +
+    currentAngle +
+    "°",
+    30,
+    70
+  );
+
+
+  // Distance
+
+  text(
+    "Distance: " +
+    nf(
+      currentDistance,
+      0,
+      2
+    ) +
+    " cm",
+    30,
+    95
+  );
+
+
+  // Status
+
+  if (objectDetected) {
+
+    fill(
+      255,
+      70,
+      30
+    );
+
+    textSize(20);
+
+    text(
+      "OBJECT DETECTED",
+      width - 260,
+      45
+    );
+
+  } else {
+
+    fill(
+      70,
+      255,
+      50
+    );
+
+    textSize(20);
+
+    text(
+      "NO OBJECT",
+      width - 170,
+      45
+    );
+  }
+}
+
+
+// =====================================================
+// SERIAL DATA FROM ESP32-C6
+// =====================================================
+
+void serialEvent(Serial port) {
+
+  String data =
+    port.readStringUntil('\n');
+
+  if (data == null) {
+    return;
+  }
+
+  data = trim(data);
+
+  println(data);
+
+
+  // Expected data:
+  //
+  // 90,45
+  //
+  // angle = 90
+  // distance = 45 cm
+
+  String[] values =
+    split(data, ',');
+
+
+  if (values.length == 2) {
+
+    try {
+
+      currentAngle =
+        int(values[0]);
+
+      currentDistance =
+        float(values[1]);
+
+
+      // ---------------------------------
+      // OBJECT DETECTION
+      // ---------------------------------
+
+      if (
+        currentDistance > 2 &&
+        currentDistance <=
+        DETECTION_DISTANCE
+      ) {
+
+        objectDetected = true;
+
+
+        // Convert polar coordinates
+        // to radar coordinates
+
+        float r =
+          map(
+            currentDistance,
+            0,
+            MAX_DISTANCE,
+            0,
+            radarRadius
+          );
+
+        float a =
+          radians(
+            180 - currentAngle
+          );
+
+        float x =
+          cos(a) * r;
+
+        float y =
+          -sin(a) * r;
+
+
+        detectedObjects.add(
+          new PVector(x, y)
+        );
+
+
+        // Limit trail
+
+        if (
+          detectedObjects.size()
+          > 100
+        ) {
+
+          detectedObjects.remove(0);
+        }
+
+      } else {
+
+        objectDetected = false;
+      }
+
+    }
+    catch (Exception e) {
+
+      println(
+        "Invalid data: " + data
+      );
+    }
+  }
+}
