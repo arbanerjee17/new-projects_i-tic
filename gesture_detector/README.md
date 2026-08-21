@@ -1,6 +1,7 @@
 Gesture Controlled Door — ESP32-C6 + Servo + OLED (Browser Version)
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/87e4b5a8-df55-4749-8767-2e9c0e1f4431" />
+<img width="1882" height="834" alt="image" src="https://github.com/user-attachments/assets/0deee18c-b2fc-4caa-86a3-c27a6a5ab94f" />
+
 
 A webcam in your browser watches your hand using MediaPipe (runs entirely in-browser, no installs). Open palm → door opens. Fist → door closes. The command travels over WiFi (HTTP) to the ESP32-C6, which drives the servo (mimicking the door) and updates the OLED with "Door Opened" / "Door Closed".
 
