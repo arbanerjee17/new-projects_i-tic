@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Gesture Controlled Door</title>
+<style>
+  :root {
+    --bg: #12151a;
+    --panel: #1b1f26;
+    --accent: #4fd1c5;
+    --accent-warn: #f6ad55;
+    --text: #e8ecf1;
+    --text-dim: #8993a4;
+    --border: #2a2f3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    letter-spacing: 0.2px;
+  }
+  p.sub {
+    color: var(--text-dim);
+    margin: 0 0 20px;
+    font-size: 14px;
+  }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 920px;
+  }
+  .video-wrap {
+    position: relative;
+    width: 480px;
+    max-width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+  video, canvas {
+    width: 100%;
+    display: block;
+  }
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  .panel {
+    width: 300px;
+    max-width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  label {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: block;
+    margin-bottom: 4px;
+  }
+  input[type="text"] {
+    width: 100%;
+    background: #0f1216;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  button {
+    background: var(--accent);
+    color: #0b1a18;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .status-row:last-child { border-bottom: none; }
+  .status-val {
+    font-weight: 600;
+  }
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--text-dim);
+  }
+  .dot.on { background: var(--accent); }
+  .dot.warn { background: var(--accent-warn); }
+  #log {
+    background: #0f1216;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    height: 130px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  #gestureBanner {
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+    background: #0f1216;
+    border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<h1>Gesture Controlled Door</h1>
+<p class="sub">Open palm = open door &nbsp;·&nbsp; Fist = close door</p>
+
+<div class="layout">
+  <div class="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="panel">
+    <div>
+      <label for="espIp">ESP32-C6 IP address</label>
+      <input type="text" id="espIp" value="10.83.156.53" />
+    </div>
+    <button id="startBtn">Start Camera</button>
+    <button id="testBtn" class="secondary">Test connection</button>
+
+    <div id="gestureBanner">Waiting for camera...</div>
+
+    <div>
+      <div class="status-row">
+        <span><span id="camDot" class="dot"></span>Camera</span>
+        <span id="camStatus" class="status-val">Off</span>
+      </div>
+      <div class="status-row">
+        <span><span id="doorDot" class="dot"></span>Door</span>
+        <span id="doorStatus" class="status-val">Unknown</span>
+      </div>
+    </div>
+
+    <div>
+      <label>Log</label>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MediaPipe Tasks Vision, loaded from CDN, no install needed -->
+<script type="module">
+  import {
+    HandLandmarker,
+    FilesetResolver,
+  } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+  const video = document.getElementById("video");
+  const overlay = document.getElementById("overlay");
+  const ctx = overlay.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
+  const testBtn = document.getElementById("testBtn");
+  const espIpInput = document.getElementById("espIp");
+  const gestureBanner = document.getElementById("gestureBanner");
+  const camDot = document.getElementById("camDot");
+  const camStatus = document.getElementById("camStatus");
+  const doorDot = document.getElementById("doorDot");
+  const doorStatus = document.getElementById("doorStatus");
+  const logEl = document.getElementById("log");
+
+  const FINGER_TIPS = [8, 12, 16, 20];
+  const FINGER_PIPS = [6, 10, 14, 18];
+  const THUMB_TIP = 4, THUMB_IP = 3;
+  const COOLDOWN_MS = 1500;
+
+  let handLandmarker = null;
+  let running = false;
+  let lastSentState = null;
+  let lastSentTime = 0;
+
+  function log(msg) {
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function countFingersUp(landmarks, handedness) {
+    let up = 0;
+    const isRight = handedness === "Right";
+    if (isRight) {
+      if (landmarks[THUMB_TIP].x < landmarks[THUMB_IP].x) up++;
+    } else {
+      if (landmarks[THUMB_TIP].x > landmarks[THUMB_IP].x) up++;
+    }
+    for (let i = 0; i < FINGER_TIPS.length; i++) {
+      if (landmarks[FINGER_TIPS[i]].y < landmarks[FINGER_PIPS[i]].y) up++;
+    }
+    return up;
+  }
+
+  function drawLandmarks(landmarks) {
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    ctx.fillStyle = "#4fd1c5";
+    for (const pt of landmarks) {
+      ctx.beginPath();
+      ctx.arc(pt.x * overlay.width, pt.y * overlay.height, 3, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+
+  async function sendDoorCommand(state) {
+    const ip = espIpInput.value.trim();
+    const url = `http://${ip}/door?state=${state}`;
+    try {
+      const res = await fetch(url, { method: "GET" });
+      const text = await res.text();
+      log(`SENT state=${state} -> ${res.status} ${text}`);
+      doorStatus.textContent = state === "open" ? "Opened" : "Closed";
+      doorDot.className = "dot on";
+    } catch (err) {
+      log(`ERROR reaching ${ip}: ${err.message}`);
+      doorDot.className = "dot warn";
+    }
+  }
+
+  testBtn.addEventListener("click", async () => {
+    const ip = espIpInput.value.trim();
+    log(`Testing connection to ${ip} ...`);
+    try {
+      const res = await fetch(`http://${ip}/status`);
+      const text = await res.text();
+      log(`OK: ${text}`);
+    } catch (err) {
+      log(`FAILED: ${err.message} (check WiFi/CORS - see notes)`);
+    }
+  });
+
+  async function setupHandLandmarker() {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+    });
+  }
+
+  async function startCamera() {
+    startBtn.disabled = true;
+    startBtn.textContent = "Loading model...";
+    try {
+      await setupHandLandmarker();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      await new Promise((resolve) => (video.onloadedmetadata = resolve));
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+      camDot.className = "dot on";
+      camStatus.textContent = "Live";
+      running = true;
+      startBtn.textContent = "Camera running";
+      log("Camera + model ready. Show a gesture.");
+      requestAnimationFrame(detectLoop);
+    } catch (err) {
+      log(`Camera/model error: ${err.message}`);
+      startBtn.disabled = false;
+      startBtn.textContent = "Start Camera";
+    }
+  }
+
+  function detectLoop() {
+    if (!running) return;
+    const now = performance.now();
+    const result = handLandmarker.detectForVideo(video, now);
+
+    if (result.landmarks.length > 0) {
+      const landmarks = result.landmarks[0];
+      const handedness = result.handednesses[0][0].categoryName; // "Left"/"Right"
+      drawLandmarks(landmarks);
+
+      const fingersUp = countFingersUp(landmarks, handedness);
+      let desiredState = null;
+      let text = `${fingersUp} fingers up`;
+
+      if (fingersUp >= 4) {
+        text = "OPEN PALM -> Door OPEN";
+        desiredState = "open";
+      } else if (fingersUp === 0) {
+        text = "FIST -> Door CLOSE";
+        desiredState = "close";
+      }
+      gestureBanner.textContent = text;
+
+      const nowMs = Date.now();
+      if (
+        desiredState &&
+        desiredState !== lastSentState &&
+        nowMs - lastSentTime > COOLDOWN_MS
+      ) {
+        sendDoorCommand(desiredState);
+        lastSentState = desiredState;
+        lastSentTime = nowMs;
+      }
+    } else {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      gestureBanner.textContent = "No hand detected";
+    }
+
+    requestAnimationFrame(detectLoop);
+  }
+
+  startBtn.addEventListener("click", startCamera);
+</script>
+</body>
+</html>
