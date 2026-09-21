@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Attendance AI</title>
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+:root{--bg:#07100f;--panel:#0d1817;--line:#203330;--text:#eef7f4;--muted:#8ba19c;--brand:#54e39b;--danger:#ff6b6b;--warn:#f5c451}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 80% 0%,#12312a 0,#07100f 38%) fixed;color:var(--text);font:14px Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input{font:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+/* layout */
+.app{display:flex;min-height:100vh}
+.side{width:235px;background:#081210;border-right:1px solid var(--line);padding:22px 14px;position:fixed;inset:0 auto 0 0}
+.brand{font-size:18px;font-weight:800;padding:8px 12px 25px}
+.brand b{color:var(--brand)}
+.nav{display:grid;gap:6px}
+.nav button{border:0;background:transparent;color:var(--muted);padding:11px 12px;text-align:left;border-radius:10px;cursor:pointer}
+.nav button:hover,.nav button.active{background:#10211d;color:#fff}
+.nav button.active{box-shadow:inset 3px 0 var(--brand)}
+.main{margin-left:235px;width:calc(100% - 235px);padding:24px 30px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;gap:12px}
+.eyebrow{color:var(--brand);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-family:monospace}
+.status{display:inline-flex;align-items:center;gap:7px;color:#a8b9b5;font-size:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 12px var(--brand)}
+.grid{display:grid;gap:16px}
+.hero{grid-template-columns:1.4fr .8fr}
+.two{grid-template-columns:1.2fr .8fr}
+.kpis{grid-template-columns:repeat(4,1fr);margin:16px 0}
+.card{background:linear-gradient(145deg,rgba(17,31,29,.96),rgba(10,20,18,.96));border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 12px 35px #0004}
+.hero h1{font-size:38px;line-height:1.05;margin:14px 0 10px}
+.hero h1 span{color:var(--brand)}
+.hero p{max-width:650px;color:var(--muted);line-height:1.7}
+.kpi .label{color:var(--muted);font-size:12px}
+.kpi .value{font-size:28px;font-weight:800;margin-top:8px}
+
+/* controls */
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.btn{border:1px solid var(--line);background:#13231f;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--brand);color:#06110d;border-color:var(--brand);font-weight:800}
+.btn.danger{color:#ff9a9a;border-color:#653333}
+.btn.small{padding:6px 10px;font-size:12px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{border:1px solid var(--line);background:#0b1614;color:var(--muted);border-radius:9px;padding:9px 6px;cursor:pointer}
+.seg button.on{background:var(--brand);border-color:var(--brand);color:#06110d;font-weight:800}
+.field{display:grid;gap:6px;margin:12px 0}
+.field label{color:var(--muted);font-size:12px}
+.field input[type=text],.field input[type=number],.field input[type=date]{background:#07100f;border:1px solid var(--line);color:#fff;border-radius:9px;padding:10px;width:100%}
+.field input:disabled{opacity:.6}
+.check{display:flex;gap:10px;align-items:flex-start;color:#bcd0cb;line-height:1.5;margin:14px 0}
+.check input{margin-top:3px;accent-color:var(--brand)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* lists & tables */
+.list{display:grid;gap:8px}
+.row{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:11px;padding:12px 14px;gap:10px}
+.pill{padding:5px 8px;border-radius:999px;background:#17372b;color:var(--brand);font-size:11px;white-space:nowrap}
+.pill.out{background:#29251b;color:var(--warn)}
+.page{display:none}
+.page.active{display:block}
+.pagehead{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px}
+.pagehead h2{margin:0;font-size:26px}
+.tablewrap{overflow-x:auto}
+.table{width:100%;border-collapse:collapse;min-width:520px}
+.table th,.table td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}
+.table th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.table td.right,.table th.right{text-align:right}
+.table td.right .btn{margin-left:6px}
+
+/* camera */
+.camera{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}
+.videoBox{position:relative;overflow:hidden;border-radius:15px;background:#020706;min-height:430px;border:1px solid var(--line)}
+video{width:100%;height:100%;min-height:430px;object-fit:cover;display:block;transform:scaleX(-1)}
+.scan{position:absolute;left:7%;right:7%;height:2px;background:var(--brand);box-shadow:0 0 16px var(--brand);animation:scan 2.2s linear infinite;display:none}
+@keyframes scan{0%{top:8%}50%{top:90%}100%{top:8%}}
+@media(prefers-reduced-motion:reduce){.scan{animation:none;top:50%}}
+.cameraState{position:absolute;top:12px;left:12px;background:#06100ecc;padding:8px 10px;border-radius:9px;font-size:12px}
+.prompt{position:absolute;left:12px;right:12px;bottom:12px;background:#06100ee6;border:1px solid var(--brand);border-radius:12px;padding:12px 14px;text-align:center;font-weight:700}
+.progress{height:6px;background:#1a2c28;border-radius:9px;margin-top:10px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--brand);transition:width .3s}
+
+/* charts */
+.chart{height:240px;display:flex;align-items:flex-end;gap:8px;padding-top:10px;overflow-x:auto}
+.col{flex:1;min-width:34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.col .val{font-size:11px;margin-bottom:4px;color:#cfe3dd}
+.col .bar{width:100%;background:var(--brand);border-radius:5px 5px 0 0;min-height:3px;opacity:.85}
+.col small{color:var(--muted);font-size:10px;margin-top:6px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* misc */
+.modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:20px;z-index:5}
+.modal.open{display:flex}
+.modalBox{width:min(520px,100%);max-height:100%;overflow:auto;background:#0d1817;border:1px solid var(--line);border-radius:16px;padding:20px}
+.notice{background:#13261f;border:1px solid #285541;color:#bcebd5;padding:12px;border-radius:10px;line-height:1.5;margin-top:14px}
+.notice.warn{background:#2a2412;border-color:#6b5a1f;color:#f0dc9a}
+.muted{color:var(--muted)}
+.footer{color:#627570;font-size:11px;margin-top:20px;line-height:1.6}
+.flash{position:fixed;left:50%;top:18px;transform:translate(-50%,-24px);opacity:0;pointer-events:none;background:#0d1817;border:1px solid var(--line);padding:12px 20px;border-radius:12px;font-weight:700;z-index:20;transition:opacity .2s,transform .2s;max-width:90vw;text-align:center;box-shadow:0 12px 35px #0008}
+.flash.show{opacity:1;transform:translate(-50%,0)}
+.flash.ok{border-color:var(--brand);color:var(--brand)}
+.flash.warn{border-color:var(--warn);color:var(--warn)}
+.flash.err{border-color:var(--danger);color:var(--danger)}
+
+@media(max-width:850px){
+  .side{width:70px}.brand{font-size:0}.brand b{font-size:18px}
+  .nav button{font-size:0;text-align:center}.nav button::first-letter{font-size:18px}
+  .main{margin-left:70px;width:calc(100% - 70px);padding:18px}
+  .hero,.camera,.two,.row2{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .hero h1{font-size:30px}
+}
+</style>
+</head>
+<body>
+<div class="flash" id="flash" role="status" aria-live="polite"></div>
+
+<div class="app">
+<aside class="side">
+  <div class="brand">ATTENDANCE<b>AI</b></div>
+  <div class="nav">
+    <button data-page="dashboard" class="active">⌂ Dashboard</button>
+    <button data-page="camera">◉ Live Camera</button>
+    <button data-page="members">♙ Members</button>
+    <button data-page="attendance">▤ Attendance</button>
+    <button data-page="analytics">◒ Analytics</button>
+    <button data-page="reports">⇩ Reports</button>
+    <button data-page="settings">⚙ Settings</button>
+  </div>
+</aside>
+
+<main class="main">
+<header class="top">
+  <div><div class="eyebrow">Build Club • Makerspace 01</div><div class="status"><span class="dot"></span> Local browser mode</div></div>
+  <div class="muted" id="clock"></div>
+</header>
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="page active">
+  <div class="grid hero">
+    <div class="card">
+      <div class="eyebrow">Live Build Club</div>
+      <h1>AI Smart <span>Attendance</span> System</h1>
+      <p>Browser-based face recognition attendance with member registration, check-in/check-out, live usage hours, analytics and CSV reporting.</p>
+      <div class="actions"><button class="btn primary" onclick="showPage('camera')">▶ Launch Live Camera</button><button class="btn" onclick="openModal()">＋ Register Member</button></div>
+      <div class="footer">Face matching runs locally in the browser. Face data and attendance are stored unencrypted in this browser's localStorage, so register only members who have agreed, and download a backup regularly (Settings).</div>
+    </div>
+    <div class="card" style="display:grid;place-items:center;min-height:260px;text-align:center">
+      <div><div style="font-size:70px;color:var(--brand)">◉</div><div class="eyebrow" id="engineState">Face engine idle</div></div>
+    </div>
+  </div>
+  <div class="grid kpis">
+    <div class="card kpi"><div class="label">Total members</div><div class="value" id="kMembers">0</div></div>
+    <div class="card kpi"><div class="label">Inside now</div><div class="value" id="kInside">0</div></div>
+    <div class="card kpi"><div class="label">Hours logged today</div><div class="value" id="kHours">0.0h</div></div>
+    <div class="card kpi"><div class="label">Avg. match score</div><div class="value" id="kScore">—</div></div>
+  </div>
+  <div class="card"><div class="eyebrow">// today at a glance</div><div class="list" id="glance" style="margin-top:12px"></div></div>
+</section>
+
+<!-- CAMERA -->
+<section id="camera" class="page">
+  <div class="pagehead"><div><h2>Live Camera Console</h2><div class="muted">Detect → match → check in/out</div></div><button class="btn" id="cameraBtn" onclick="toggleCamera()">Start camera</button></div>
+  <div class="notice warn" id="secureWarn" hidden style="margin:0 0 16px">The camera needs a secure page. Open this file through <b>http://localhost</b> or <b>https://</b> instead of a plain network address.</div>
+  <div class="camera">
+    <div class="videoBox">
+      <video id="video" autoplay muted playsinline></video>
+      <div class="scan" id="scanLine"></div>
+      <div class="cameraState" id="cameraState">Camera stopped</div>
+      <div class="prompt" id="prompt" hidden><div id="promptText"></div><div class="progress"><i id="progressBar"></i></div></div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Recognition</div>
+      <h3 id="matchName" style="margin:10px 0 6px">No match</h3>
+      <p class="muted" id="matchInfo" style="margin:0">Register a member, then face the camera.</p>
+      <div class="eyebrow" style="margin-top:22px">Kiosk mode</div>
+      <div class="seg" id="modeSeg" style="margin-top:8px">
+        <button data-mode="in">Check in</button><button data-mode="out">Check out</button><button data-mode="auto">Auto</button>
+      </div>
+      <p class="muted" id="modeHelp" style="line-height:1.5"></p>
+      <div class="actions" style="margin-top:8px"><button class="btn" onclick="manualToggle()">Manual check in/out</button></div>
+      <div class="notice">Faces are matched on this device by comparing face descriptors with the threshold from Settings. An action is recorded only after the same member is recognized in two scans in a row.</div>
+    </div>
+  </div>
+</section>
+
+<!-- MEMBERS -->
+<section id="members" class="page">
+  <div class="pagehead"><div><h2>Members</h2><div class="muted">Register and manage Build Club members</div></div><button class="btn primary" onclick="openModal()">＋ Register Member</button></div>
+  <div class="card tablewrap"><table class="table"><thead><tr><th>Name</th><th>Roll / ID</th><th>Status</th><th>Hours</th><th class="right">Actions</th></tr></thead><tbody id="membersTable"></tbody></table></div>
+</section>
+
+<!-- ATTENDANCE -->
+<section id="attendance" class="page">
+  <div class="pagehead"><div><h2>Attendance</h2><div class="muted">Check-in / check-out session log</div></div></div>
+  <div class="card tablewrap"><table class="table"><thead><tr><th>Date</th><th>Member</th><th>Check in</th><th>Check out</th><th>Duration</th></tr></thead><tbody id="attendanceTable"></tbody></table></div>
+  <div class="footer" id="attNote"></div>
+</section>
+
+<!-- ANALYTICS -->
+<section id="analytics" class="page">
+  <div class="pagehead"><div><h2>Analytics</h2><div class="muted">Usage patterns from local attendance history</div></div></div>
+  <div class="grid two">
+    <div class="card"><div class="eyebrow">// sessions by member</div><div class="chart" id="memberChart"></div></div>
+    <div class="card"><div class="eyebrow">// usage summary</div><div class="list" id="summary" style="margin-top:16px"></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><div class="eyebrow">// hours logged, last 7 days</div><div class="chart" id="dayChart"></div></div>
+</section>
+
+<!-- REPORTS -->
+<section id="reports" class="page">
+  <div class="pagehead"><div><h2>Reports</h2><div class="muted">Export attendance data</div></div><button class="btn primary" onclick="downloadCSV()">⇩ Download CSV</button></div>
+  <div class="card">
+    <div class="row2">
+      <div class="field"><label for="repFrom">From date</label><input type="date" id="repFrom" onchange="renderReportInfo()"></div>
+      <div class="field"><label for="repTo">To date</label><input type="date" id="repTo" onchange="renderReportInfo()"></div>
+    </div>
+    <div class="muted" id="repCount"></div>
+    <div class="notice">Columns: date, member ID, member name, check-in, check-out (ISO time), duration in minutes, auto-closed flag. Leave both dates empty to export everything.</div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section id="settings" class="page">
+  <div class="pagehead"><div><h2>Settings</h2><div class="muted">Face engine, sessions and local data</div></div></div>
+  <div class="card">
+    <div class="field"><label for="threshold">Face match threshold, 0.30–0.70 (lower is stricter; 0.45–0.55 works well)</label><input id="threshold" type="number" step=".01" min=".3" max=".7"></div>
+    <div class="row2">
+      <div class="field"><label for="maxHours">Max session length (hours) before auto check-out</label><input id="maxHours" type="number" step="1" min="1" max="24"></div>
+      <div class="field"><label for="cooldown">Kiosk cooldown per member (seconds)</label><input id="cooldown" type="number" step="5" min="0" max="600"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="midnight"><span>Also auto check-out at 23:59 on the day of check-in (forgotten check-outs won't inflate hours)</span></label>
+    <div class="field"><label>Model source</label><input type="text" disabled value="./models (if present), then jsDelivr, then GitHub raw"></div>
+    <div class="actions">
+      <button class="btn primary" onclick="saveSettings()">Save settings</button>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="eyebrow">// backup &amp; data</div>
+    <p class="muted" style="line-height:1.6">Clearing browser data erases everything. The backup file includes face data, so store it privately.</p>
+    <div class="actions" style="margin-top:8px">
+      <button class="btn" onclick="downloadBackup()">⇩ Download backup (JSON)</button>
+      <button class="btn" onclick="document.getElementById('restoreFile').click()">⇧ Restore from backup</button>
+      <button class="btn danger" onclick="resetData()">Reset all local data</button>
+    </div>
+    <input type="file" id="restoreFile" accept="application/json,.json" hidden>
+  </div>
+</section>
+</main>
+</div>
+
+<!-- REGISTER MODAL -->
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+<div class="modalBox">
+  <div class="pagehead"><h2 id="modalTitle">Register member</h2><button class="btn" onclick="closeModal()" aria-label="Close">✕</button></div>
+  <div class="field"><label for="mName">Full name</label><input type="text" id="mName" placeholder="e.g. Arjun Das" autocomplete="off"></div>
+  <div class="field"><label for="mRoll">Roll / member ID</label><input type="text" id="mRoll" placeholder="e.g. BC-001" autocomplete="off"></div>
+  <label class="check"><input type="checkbox" id="mConsent"><span>This person agrees to have their face data stored on this device for attendance.</span></label>
+  <div class="notice" style="margin-top:0">The camera will take about a dozen face samples over roughly 15 seconds. You'll be asked to turn your head slightly.</div>
+  <div class="actions"><button class="btn primary" id="regBtn" onclick="registerMember()">Capture &amp; register</button><button class="btn" onclick="closeModal()">Cancel</button></div>
+</div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- constants & helpers ---------- */
+const KEY = "attendance_ai_v2";
+const OLD_KEY = "nexus_attendance_v1";
+const MODEL_SOURCES = [
+  "./models",
+  "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights",
+  "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights"
+];
+const SCAN_MS = 700;        // delay between scans
+const STREAK = 2;           // consecutive matching scans before an action
+const MARGIN = 0.03;        // best match must beat the 2nd-best member by this distance
+const MIN_SAMPLES = 6;      // minimum good face samples for enrollment
+const MODE_HELP = {
+  in:   "Recognized members are checked in. Members already inside are ignored.",
+  out:  "Recognized members are checked out. Members who aren't inside are ignored.",
+  auto: "Each recognition switches the member between inside and away."
+};
+
+const $ = id => document.getElementById(id);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+const pad = n => String(n).padStart(2, "0");
+const localDate = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const today = () => localDate(new Date());
+const fmtTime = iso => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function fmtDur(min) {
+  const t = Math.round(min || 0), h = Math.floor(t / 60), m = t % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+let flashTimer;
+function flash(msg, kind = "ok") {
+  const el = $("flash");
+  el.textContent = msg;
+  el.className = "flash show " + kind;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => (el.className = "flash"), 3500);
+}
+
+/* ---------- data layer ---------- */
+function defaults() {
+  return { members: [], sessions: [], settings: { threshold: 0.5, maxHours: 12, closeAtMidnight: true, cooldown: 60, mode: "in" } };
+}
+
+function normalize(d) {
+  const out = defaults();
+  Object.assign(out.settings, (d && d.settings) || {});
+  const st = out.settings;
+  st.threshold = clamp(Number(st.threshold) || 0.5, 0.3, 0.7);
+  st.maxHours = clamp(Number(st.maxHours) || 12, 1, 24);
+  st.cooldown = clamp(Number.isFinite(Number(st.cooldown)) ? Number(st.cooldown) : 60, 0, 600);
+  st.closeAtMidnight = st.closeAtMidnight !== false;
+  if (!["in", "out", "auto"].includes(st.mode)) st.mode = "in";
+
+  out.members = ((d && d.members) || [])
+    .filter(m => m && typeof m.name === "string" && typeof m.roll === "string")
+    .map(m => {
+      let ds = Array.isArray(m.descriptors) ? m.descriptors : Array.isArray(m.descriptor) ? [m.descriptor] : [];
+      ds = ds.filter(x => Array.isArray(x) && x.length === 128 && x.every(Number.isFinite));
+      return { id: String(m.id || uid()), name: m.name, roll: m.roll, descriptors: ds, createdAt: m.createdAt || new Date().toISOString() };
+    });
+
+  out.sessions = ((d && d.sessions) || [])
+    .filter(s => s && typeof s.memberId === "string" && !isNaN(new Date(s.in)))
+    .map(s => ({
+      id: String(s.id || uid()), memberId: s.memberId, name: String(s.name || "Unknown"), roll: String(s.roll || ""),
+      date: String(s.date || localDate(new Date(s.in))), in: s.in, out: s.out || null,
+      duration: Number(s.duration) || 0, score: typeof s.score === "number" ? s.score : null, auto: !!s.auto
+    }));
+  return out;
+}
+
+function load() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); // OLD_KEY = migrate from the first version
+    return raw ? normalize(JSON.parse(raw)) : defaults();
+  } catch (e) {
+    console.error("Could not read saved data", e);
+    try { if (raw) localStorage.setItem(KEY + "_corrupt_backup", raw); } catch (_) {}
+    return defaults();
+  }
+}
+
+let db = load();
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { console.error(e); flash("Could not save: browser storage is full or blocked. Download a backup.", "err"); }
+  renderAll();
+}
+
+/* ---------- derived data ---------- */
+const openSession = id => db.sessions.find(s => s.memberId === id && !s.out);
+const inside = m => !!openSession(m.id);
+const sessMinutes = s => (s.out ? s.duration : (Date.now() - new Date(s.in)) / 60000);
+const memberHours = id => db.sessions.filter(s => s.memberId === id).reduce((a, s) => a + sessMinutes(s), 0) / 60;
+const rollOf = s => s.roll || (db.members.find(m => m.id === s.memberId) || {}).roll || "";
+
+/* auto check-out for forgotten sessions */
+function sweepStale() {
+  const now = Date.now(), maxMs = db.settings.maxHours * 3600000;
+  let changed = false;
+  for (const s of db.sessions) {
+    if (s.out) continue;
+    const start = new Date(s.in);
+    let cutoff = start.getTime() + maxMs;
+    if (db.settings.closeAtMidnight) {
+      cutoff = Math.min(cutoff, new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59, 999).getTime());
+    }
+    if (now > cutoff) {
+      s.out = new Date(cutoff).toISOString();
+      s.duration = (cutoff - start.getTime()) / 60000;
+      s.auto = true;
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+
+function closeOpenSession(memberId) {
+  const s = openSession(memberId);
+  if (!s) return null;
+  const now = Date.now();
+  s.out = new Date(now).toISOString();
+  s.duration = (now - new Date(s.in)) / 60000;
+  return s;
+}
+
+/* ---------- rendering ---------- */
+function renderAll() {
+  const sc = db.sessions.filter(s => typeof s.score === "number");
+  const todayMins = db.sessions.filter(s => s.date === today()).reduce((a, s) => a + sessMinutes(s), 0);
+  $("kMembers").textContent = db.members.length;
+  $("kInside").textContent = db.members.filter(inside).length;
+  $("kHours").textContent = (todayMins / 60).toFixed(1) + "h";
+  $("kScore").textContent = sc.length ? Math.round(sc.reduce((a, s) => a + s.score, 0) / sc.length) + "%" : "—";
+
+  $("glance").innerHTML = db.members.slice(0, 8).map(m =>
+    `<div class="row"><div><b>${esc(m.name)}</b><div class="muted">${esc(m.roll)}</div></div>
+     <div style="display:flex;gap:12px;align-items:center"><span class="muted">${memberHours(m.id).toFixed(1)}h</span>
+     <span class="pill ${inside(m) ? "" : "out"}">${inside(m) ? "INSIDE" : "AWAY"}</span></div></div>`
+  ).join("") || '<div class="muted">No members yet. Register the first member to get started.</div>';
+
+  $("membersTable").innerHTML = db.members.map(m =>
+    `<tr><td><b>${esc(m.name)}</b></td><td>${esc(m.roll)}</td>
+     <td><span class="pill ${inside(m) ? "" : "out"}">${inside(m) ? "INSIDE" : "AWAY"}</span></td>
+     <td>${memberHours(m.id).toFixed(1)}h</td>
+     <td class="right">${inside(m) ? `<button class="btn small" data-act="forceout" data-id="${esc(m.id)}">Check out</button>` : ""}
+     <button class="btn small danger" data-act="delete" data-id="${esc(m.id)}">Delete</button></td></tr>`
+  ).join("") || '<tr><td colspan="5" class="muted">No members yet.</td></tr>';
+
+  const rows = db.sessions.slice(-300).reverse();
+  $("attendanceTable").innerHTML = rows.map(s =>
+    `<tr><td>${esc(s.date)}</td><td><b>${esc(s.name)}</b> <span class="muted">${esc(rollOf(s))}</span></td>
+     <td>${fmtTime(s.in)}</td>
+     <td>${s.out ? fmtTime(s.out) + (s.auto ? ' <span class="pill out">auto</span>' : "") : '<span class="pill">INSIDE</span>'}</td>
+     <td>${fmtDur(sessMinutes(s))}</td></tr>`
+  ).join("") || '<tr><td colspan="5" class="muted">No sessions yet. They appear here after the first check-in.</td></tr>';
+  $("attNote").textContent = db.sessions.length > 300 ? `Showing the latest 300 of ${db.sessions.length} sessions. The CSV export includes all of them.` : "";
+
+  document.querySelectorAll("#modeSeg button").forEach(b => b.classList.toggle("on", b.dataset.mode === db.settings.mode));
+  $("modeHelp").textContent = MODE_HELP[db.settings.mode];
+  if ($("analytics").classList.contains("active")) renderAnalytics();
+  if ($("reports").classList.contains("active")) renderReportInfo();
+}
+
+function bars(items) {
+  if (!items.length) return '<div class="muted">No data yet</div>';
+  const max = Math.max(...items.map(i => i.value), 0) || 1;
+  return items.map(i =>
+    `<div class="col" title="${esc(i.title)}"><span class="val">${esc(i.text)}</span>
+     <div class="bar" style="height:${Math.max(3, (i.value / max) * 150)}px"></div><small>${esc(i.label)}</small></div>`
+  ).join("");
+}
+
+function renderAnalytics() {
+  $("memberChart").innerHTML = bars(db.members.map(m => {
+    const n = db.sessions.filter(s => s.memberId === m.id).length;
+    return { value: n, text: n, label: m.roll, title: `${m.name}: ${n} sessions` };
+  }));
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
+  $("dayChart").innerHTML = bars(days.map(d => {
+    const key = localDate(d);
+    const h = db.sessions.filter(s => s.date === key).reduce((a, s) => a + sessMinutes(s), 0) / 60;
+    return { value: h, text: h.toFixed(1), label: d.toLocaleDateString([], { weekday: "short" }), title: `${key}: ${h.toFixed(1)}h` };
+  }));
+
+  const total = db.sessions.length, closed = db.sessions.filter(s => s.out).length;
+  const hours = db.sessions.reduce((a, s) => a + sessMinutes(s), 0) / 60;
+  const avg = total ? hours / total : 0;
+  $("summary").innerHTML =
+    `<div class="row"><span>Total sessions</span><b>${total}</b></div>
+     <div class="row"><span>Completed sessions</span><b>${closed}</b></div>
+     <div class="row"><span>Total logged hours</span><b>${hours.toFixed(1)}h</b></div>
+     <div class="row"><span>Average session</span><b>${fmtDur(avg * 60)}</b></div>`;
+}
+
+/* ---------- navigation & modal ---------- */
+function showPage(id) {
+  if (id !== "camera" && stream) stopCamera();
+  document.querySelectorAll(".page").forEach(p => p.classList.toggle("active", p.id === id));
+  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.page === id));
+  if (id === "analytics") renderAnalytics();
+  if (id === "reports") renderReportInfo();
+  if (id === "settings") fillSettings();
+  if (id === "camera") ensureModels();
+}
+document.querySelectorAll(".nav button").forEach(b => (b.onclick = () => showPage(b.dataset.page)));
+
+function openModal() { $("modal").classList.add("open"); $("mName").focus(); }
+function closeModal() { $("modal").classList.remove("open"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+/* delegated clicks for table buttons and mode switch (no inline handlers built from data) */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act],[data-mode]");
+  if (!b) return;
+  if (b.dataset.mode) { db.settings.mode = b.dataset.mode; save(); return; }
+  if (b.dataset.act === "delete") deleteMember(b.dataset.id);
+  if (b.dataset.act === "forceout") forceOut(b.dataset.id);
+});
+
+/* ---------- face engine ---------- */
+let modelsReady = false, modelsPromise = null;
+const setState = t => ($("cameraState").textContent = t);
+const setEngine = t => ($("engineState").textContent = t);
+
+function ensureModels() {
+  if (modelsReady) return Promise.resolve(true);
+  if (modelsPromise) return modelsPromise;
+  modelsPromise = (async () => {
+    if (typeof faceapi === "undefined") { setState("face-api.js failed to load. Check your internet connection."); setEngine("Face engine unavailable"); return false; }
+    setState("Loading face models…"); setEngine("Loading face models…");
+    for (const url of MODEL_SOURCES) {
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(url),
+          faceapi.nets.faceLandmark68Net.loadFromUri(url),
+          faceapi.nets.faceRecognitionNet.loadFromUri(url)
+        ]);
+        modelsReady = true; setState(stream ? "Scanning…" : "Face engine ready"); setEngine("Face engine ready");
+        return true;
+      } catch (e) { console.warn("Model source failed:", url, e); }
+    }
+    setState("Model load failed. Check your internet connection."); setEngine("Face engine unavailable");
+    return false;
+  })().finally(() => { if (!modelsReady) modelsPromise = null; });
+  return modelsPromise;
+}
+
+const detect = () => faceapi
+  .detectSingleFace($("video"), new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+  .withFaceLandmarks().withFaceDescriptor();
+
+function dist(a, b) { let s = 0; for (let i = 0; i < a.length; i++) { const d = a[i] - b[i]; s += d * d; } return Math.sqrt(s); }
+
+/* ---------- camera control (single source of truth) ---------- */
+let stream = null, scanning = false, loopId = 0, starting = false, busy = false;
+
+function setCameraUI(on) {
+  $("cameraBtn").textContent = on ? "Stop camera" : "Start camera";
+  $("scanLine").style.display = on ? "block" : "none";
+  setState(on ? "Scanning…" : "Camera stopped");
+}
+
+function videoReady(v) {
+  return new Promise(res => {
+    if (v.readyState >= 2 && v.videoWidth) return res();
+    const t = setTimeout(res, 4000);
+    v.addEventListener("loadeddata", () => { clearTimeout(t); res(); }, { once: true });
+  });
+}
+
+async function startCamera() {
+  if (stream) return true;
+  if (starting) return false;
+  starting = true;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      flash("Camera API unavailable. Use http://localhost or https://", "err"); return false;
+    }
+    if (!(await ensureModels())) return false;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 960 } }, audio: false });
+    } catch (e) {
+      console.error(e); flash("Camera access failed. Allow webcam permission and use http://localhost or https://", "err"); return false;
+    }
+    const v = $("video");
+    v.srcObject = stream;
+    await videoReady(v);
+    try { await v.play(); } catch (_) {}
+    scanning = true; setCameraUI(true); runLoop();
+    return true;
+  } finally { starting = false; }
+}
+
+function stopCamera() {
+  scanning = false; loopId++;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; $("video").srcObject = null;
+  streak = { id: null, n: 0 };
+  setCameraUI(false);
+}
+
+async function toggleCamera() { if (stream) stopCamera(); else await startCamera(); }
+
+/* scanning loop: one loop at a time, survives errors */
+function runLoop() {
+  const id = ++loopId;
+  (async function tick() {
+    if (!scanning || id !== loopId) return;
+    try { await scanOnce(); } catch (e) { console.error("scan error", e); }
+    if (scanning && id === loopId) setTimeout(tick, SCAN_MS);
+  })();
+}
+
+let streak = { id: null, n: 0 }, lastMatch = null, lastMatchAt = 0, lastScore = 0;
+const lastAct = {};
+
+async function scanOnce() {
+  if (busy) return;
+  const v = $("video");
+  if (v.readyState < 2) return;
+  if (!db.members.some(m => m.descriptors.length)) { setState("Register a member to start recognizing"); return; }
+  const det = await detect();
+  if (!det) { streak = { id: null, n: 0 }; setMatch(null, "No face detected"); setState("Scanning…"); return; }
+  matchDescriptor(det.descriptor);
+}
+
+function setMatch(m, info) {
+  $("matchName").textContent = m ? m.name : "No match";
+  $("matchInfo").textContent = info;
+}
+
+function rank(desc) {
+  const list = [];
+  for (const m of db.members) {
+    if (!m.descriptors.length) continue;
+    let best = Infinity;
+    for (const d of m.descriptors) best = Math.min(best, dist(desc, d));
+    list.push({ m, d: best });
+  }
+  return list.sort((a, b) => a.d - b.d);
+}
+
+function matchDescriptor(desc) {
+  const th = db.settings.threshold, r = rank(desc), best = r[0], second = r[1];
+  const ambiguous = best && second && second.d - best.d < MARGIN;
+  if (!best || best.d > th || ambiguous) {
+    streak = { id: null, n: 0 }; lastMatch = null;
+    setMatch(null, ambiguous && best.d <= th ? "Face is too similar to more than one member" : "No registered face within the threshold");
+    setState("Scanning…");
+    return;
+  }
+  const m = best.m;
+  const score = Math.round(clamp((1 - best.d / th) * 100, 0, 100));
+  lastMatch = m; lastMatchAt = Date.now(); lastScore = score;
+  setMatch(m, `${m.roll} • match score ${score}% • distance ${best.d.toFixed(3)}`);
+  setState("Recognized: " + m.name);
+  streak = streak.id === m.id ? { id: m.id, n: streak.n + 1 } : { id: m.id, n: 1 };
+  if (streak.n >= STREAK) handleRecognized(m, score);
+}
+
+/* ---------- attendance actions ---------- */
+function handleRecognized(m, score) {
+  const now = Date.now();
+  if (now - (lastAct[m.id] || 0) < db.settings.cooldown * 1000) return; // silent during cooldown
+  const open = openSession(m.id), mode = db.settings.mode;
+  if (mode === "in" && open) { lastAct[m.id] = now; flash(`${m.name} is already checked in`, "warn"); return; }
+  if (mode === "out" && !open) { lastAct[m.id] = now; flash(`${m.name} is not checked in`, "warn"); return; }
+  perform(m, open ? "out" : "in", score);
+}
+
+function perform(m, action, score) {
+  if (action === "in") {
+    db.sessions.push({ id: uid(), memberId: m.id, name: m.name, roll: m.roll, date: today(), in: new Date().toISOString(), out: null, duration: 0, score, auto: false });
+    flash(`Checked in: ${m.name}`, "ok");
+  } else {
+    const s = closeOpenSession(m.id);
+    if (!s) return;
+    flash(`Checked out: ${m.name} (${fmtDur(s.duration)})`, "ok");
+  }
+  lastAct[m.id] = Date.now();
+  save();
+}
+
+function manualToggle() {
+  if (!lastMatch || Date.now() - lastMatchAt > 15000) { flash("No member recognized in the last 15 seconds", "warn"); return; }
+  const m = db.members.find(x => x.id === lastMatch.id);
+  if (m) perform(m, openSession(m.id) ? "out" : "in", lastScore);
+}
+
+function forceOut(id) {
+  const m = db.members.find(x => x.id === id);
+  if (!m || !closeOpenSession(id)) return;
+  flash(`Checked out: ${m.name}`, "ok");
+  save();
+}
+
+/* ---------- registration ---------- */
+function showPrompt(text, frac) {
+  $("prompt").hidden = false;
+  $("promptText").textContent = text;
+  $("progressBar").style.width = Math.round((frac || 0) * 100) + "%";
+}
+const hidePrompt = () => ($("prompt").hidden = true);
+
+async function captureSamples() {
+  const phases = ["Look straight at the camera", "Turn your head slightly to one side", "Turn slightly to the other side", "Lift your chin a little"];
+  const PER = 3, total = phases.length * PER, samples = [];
+  for (let p = 0; p < phases.length; p++) {
+    showPrompt(phases[p], (p * PER) / total);
+    await sleep(1300);
+    for (let i = 0; i < PER; i++) {
+      if (!stream) { flash("Camera stopped during capture", "err"); return null; }
+      await sleep(350);
+      const d = await detect();
+      if (d && d.detection.score >= 0.6) samples.push(Array.from(d.descriptor, x => Math.round(x * 10000) / 10000));
+      showPrompt(phases[p], (p * PER + i + 1) / total);
+    }
+  }
+  if (samples.length < MIN_SAMPLES) {
+    flash(`Only ${samples.length} clear samples captured (need ${MIN_SAMPLES}). Improve the lighting and face the camera.`, "err");
+    return null;
+  }
+  return samples;
+}
+
+async function registerMember() {
+  if (busy) return;
+  const name = $("mName").value.trim(), roll = $("mRoll").value.trim();
+  if (!name || !roll) { flash("Enter a name and a member ID", "warn"); return; }
+  if (!$("mConsent").checked) { flash("Confirm the member's consent first", "warn"); return; }
+  if (db.members.some(m => m.roll.toLowerCase() === roll.toLowerCase())) { flash(`Member ID "${roll}" is already registered`, "err"); return; }
+
+  closeModal(); showPage("camera");
+  busy = true; $("regBtn").disabled = true;
+  try {
+    if (!(await startCamera())) return;
+    const samples = await captureSamples();
+    if (!samples) return;
+    const th = db.settings.threshold;
+    for (const m of db.members) {
+      for (const d of m.descriptors) {
+        if (samples.some(s => dist(s, d) < th)) { flash(`This face looks like ${m.name} (${m.roll}), who is already registered`, "err"); return; }
+      }
+    }
+    db.members.push({ id: uid(), name, roll, descriptors: samples, createdAt: new Date().toISOString() });
+    save();
+    $("mName").value = ""; $("mRoll").value = ""; $("mConsent").checked = false;
+    flash(`${name} registered (${samples.length} samples)`, "ok");
+  } catch (e) {
+    console.error(e); flash("Registration failed. See the console for details.", "err");
+  } finally {
+    busy = false; hidePrompt(); $("regBtn").disabled = false;
+  }
+}
+
+function deleteMember(id) {
+  const m = db.members.find(x => x.id === id);
+  if (!m) return;
+  if (!confirm(`Delete ${m.name}? Their face data is removed, but past attendance records are kept.`)) return;
+  closeOpenSession(id);
+  db.members = db.members.filter(x => x.id !== id);
+  delete lastAct[id];
+  save();
+}
+
+/* ---------- settings, backup, reports ---------- */
+function fillSettings() {
+  const s = db.settings;
+  $("threshold").value = s.threshold; $("maxHours").value = s.maxHours;
+  $("cooldown").value = s.cooldown; $("midnight").checked = s.closeAtMidnight;
+}
+
+function numField(id, def) { const v = $(id).value; return v !== "" && Number.isFinite(Number(v)) ? Number(v) : def; }
+
+function saveSettings() {
+  const s = db.settings;
+  s.threshold = clamp(numField("threshold", 0.5), 0.3, 0.7);
+  s.maxHours = clamp(numField("maxHours", 12), 1, 24);
+  s.cooldown = clamp(numField("cooldown", 60), 0, 600);
+  s.closeAtMidnight = $("midnight").checked;
+  save(); fillSettings(); sweepStale();
+  flash("Settings saved", "ok");
+}
+
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+function downloadBackup() {
+  const payload = { app: "attendance-ai", version: 2, exportedAt: new Date().toISOString(), data: db };
+  download(new Blob([JSON.stringify(payload)], { type: "application/json" }), `attendance-backup-${today()}.json`);
+}
+
+$("restoreFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const p = JSON.parse(reader.result), d = p.data || p;
+      if (!d || !Array.isArray(d.members) || !Array.isArray(d.sessions)) throw new Error("Not an Attendance AI backup");
+      const next = normalize(d);
+      if (!confirm(`Replace current data with this backup (${next.members.length} members, ${next.sessions.length} sessions)?`)) return;
+      db = next; save(); fillSettings(); flash("Backup restored", "ok");
+    } catch (err) { console.error(err); flash("That file isn't a valid backup", "err"); }
+  };
+  reader.readAsText(file);
+});
+
+function resetData() {
+  if (!confirm("Reset all members, attendance and settings? This cannot be undone. Download a backup first if unsure.")) return;
+  if (stream) stopCamera();
+  db = defaults(); save(); fillSettings(); flash("All local data cleared", "warn");
+}
+
+const filteredSessions = () => {
+  const f = $("repFrom").value, t = $("repTo").value;
+  return db.sessions.filter(s => (!f || s.date >= f) && (!t || s.date <= t));
+};
+const renderReportInfo = () => ($("repCount").textContent = `${filteredSessions().length} session(s) match the selected range.`);
+
+function csvCell(x) {
+  let s = String(x ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;           // block spreadsheet formula injection
+  return '"' + s.replaceAll('"', '""') + '"';
+}
+
+function downloadCSV() {
+  const list = filteredSessions();
+  if (!list.length) { flash("No sessions in this range", "warn"); return; }
+  const rows = [["Date", "Member ID", "Member Name", "Check In", "Check Out", "Duration Minutes", "Auto Closed"]];
+  list.forEach(s => rows.push([s.date, rollOf(s), s.name, new Date(s.in).toISOString(), s.out ? new Date(s.out).toISOString() : "", Math.round(sessMinutes(s)), s.auto ? "yes" : ""]));
+  const csv = rows.map(r => r.map(csvCell).join(",")).join("\r\n");
+  download(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }), "attendance-report.csv");
+}
+
+/* ---------- boot ---------- */
+setInterval(() => ($("clock").textContent = new Date().toLocaleString()), 1000);
+setInterval(() => { sweepStale(); renderAll(); }, 30000);
+$("secureWarn").hidden = !!(window.isSecureContext && navigator.mediaDevices);
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+fillSettings();
+sweepStale();
+renderAll();
+</script>
+</body>
+</html>
