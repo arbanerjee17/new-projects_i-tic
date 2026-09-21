@@ -1,0 +1,248 @@
+// =====================================================
+// ESP32-C6 LINE TRACING ROBOT (v3)
+// 2 IR Sensors + L298 Motor Driver
+// (Arduino-ESP32 core 3.x)
+// =====================================================
+
+// ---------- IR SENSOR PINS ----------
+// Manual: centre sensors = GPIO 10 and 11, outer = 2 and 3.
+// Use the two pins your front sensors are plugged into.
+const int IR_LEFT  = 2;
+const int IR_RIGHT = 3;
+
+// ---------- L298 MOTOR DRIVER PINS ----------
+// Physical LEFT motor (driver channel B)
+const int L_EN  = 23;
+const int L_IN1 = 20;
+const int L_IN2 = 21;
+
+// Physical RIGHT motor (driver channel A)
+const int R_EN  = 22;
+const int R_IN1 = 19;
+const int R_IN2 = 18;
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+const bool LEFT_MOTOR_REVERSED  = true;
+const bool RIGHT_MOTOR_REVERSED = false;
+
+// true  = both sensors sit ON the tape when centred (your setup)
+// false = tape runs BETWEEN the sensors (manual's layout)
+const bool SENSORS_ON_TAPE = true;
+
+// Learn the sensor polarity at power-up.
+// Place the robot on the line BEFORE powering on / pressing reset.
+const bool AUTO_CALIBRATE = true;
+int lineLevel = HIGH;   // fallback if calibration fails
+
+int baseSpeed   = 150;  // straight speed (0-255)
+int turnSpeed   = 40;   // inner wheel speed while correcting
+int searchSpeed = 130;  // pivot speed when the line is lost
+
+// Trim if the robot drifts to one side on a straight line.
+// Example: drifts left -> RIGHT_TRIM = 95 (or LEFT_TRIM = 105)
+int LEFT_TRIM  = 100;   // percent
+int RIGHT_TRIM = 100;   // percent
+
+const unsigned long LOST_TIMEOUT = 1500;  // ms of searching before stop
+
+// =====================================================
+// MOTOR CONTROL
+// speed: -255 (full reverse) to +255 (full forward)
+// =====================================================
+
+void driveMotor(int inA, int inB, int en, int speed) {
+  speed = constrain(speed, -255, 255);
+
+  if (speed > 0) {
+    digitalWrite(inA, HIGH);
+    digitalWrite(inB, LOW);
+    analogWrite(en, speed);
+  } else if (speed < 0) {
+    digitalWrite(inA, LOW);
+    digitalWrite(inB, HIGH);
+    analogWrite(en, -speed);
+  } else {
+    digitalWrite(inA, LOW);
+    digitalWrite(inB, LOW);
+    analogWrite(en, 0);
+  }
+}
+
+void setLeftMotor(int speed) {
+  speed = speed * LEFT_TRIM / 100;
+  if (LEFT_MOTOR_REVERSED) speed = -speed;
+  driveMotor(L_IN1, L_IN2, L_EN, speed);
+}
+
+void setRightMotor(int speed) {
+  speed = speed * RIGHT_TRIM / 100;
+  if (RIGHT_MOTOR_REVERSED) speed = -speed;
+  driveMotor(R_IN1, R_IN2, R_EN, speed);
+}
+
+void moveForward() { setLeftMotor(baseSpeed); setRightMotor(baseSpeed); }
+void turnLeft()    { setLeftMotor(turnSpeed); setRightMotor(baseSpeed); }
+void turnRight()   { setLeftMotor(baseSpeed); setRightMotor(turnSpeed); }
+void pivotLeft()   { setLeftMotor(-searchSpeed); setRightMotor(searchSpeed); }
+void pivotRight()  { setLeftMotor(searchSpeed);  setRightMotor(-searchSpeed); }
+void stopMotors()  { setLeftMotor(0); setRightMotor(0); }
+
+// =====================================================
+// SENSOR READING
+// =====================================================
+
+// Majority of 3 quick readings to filter out flicker
+bool onLine(int pin) {
+  int hits = 0;
+  for (int i = 0; i < 3; i++) {
+    if (digitalRead(pin) == lineLevel) hits++;
+    delayMicroseconds(300);
+  }
+  return hits >= 2;
+}
+
+void calibrateSensors() {
+  const int N = 20;
+  int lSum = 0, rSum = 0;
+
+  for (int i = 0; i < N; i++) {
+    lSum += digitalRead(IR_LEFT);
+    rSum += digitalRead(IR_RIGHT);
+    delay(10);
+  }
+
+  bool lStable = (lSum == 0 || lSum == N);
+  bool rStable = (rSum == 0 || rSum == N);
+  int lVal = (lSum == N) ? HIGH : LOW;
+  int rVal = (rSum == N) ? HIGH : LOW;
+
+  if (lStable && rStable && lVal == rVal) {
+    int seen = lVal;   // what both sensors read right now
+    if (SENSORS_ON_TAPE) {
+      lineLevel = seen;                              // they are over black
+    } else {
+      lineLevel = (seen == HIGH) ? LOW : HIGH;       // they are over white
+    }
+    Serial.print("Calibrated. Black reads: ");
+    Serial.println(lineLevel == HIGH ? "HIGH" : "LOW");
+  } else {
+    Serial.println("Calibration FAILED (sensors disagree) - using default");
+  }
+}
+
+// =====================================================
+// STATE
+// =====================================================
+
+enum Dir { DIR_NONE, DIR_LEFT, DIR_RIGHT };
+Dir lastDir = DIR_NONE;
+unsigned long lostSince = 0;
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IR_LEFT, INPUT);
+  pinMode(IR_RIGHT, INPUT);
+
+  pinMode(L_EN, OUTPUT);
+  pinMode(L_IN1, OUTPUT);
+  pinMode(L_IN2, OUTPUT);
+  pinMode(R_EN, OUTPUT);
+  pinMode(R_IN1, OUTPUT);
+  pinMode(R_IN2, OUTPUT);
+
+  stopMotors();
+
+  Serial.println("Line Tracing Robot Started");
+  Serial.println("Keep the robot ON the line...");
+  delay(3000);
+
+  if (AUTO_CALIBRATE) {
+    calibrateSensors();
+  }
+
+  Serial.println("Go!");
+  delay(1000);
+}
+
+// =====================================================
+// MAIN LOOP
+// =====================================================
+
+void loop() {
+  bool l = onLine(IR_LEFT);
+  bool r = onLine(IR_RIGHT);
+  int state;
+
+  if (l && r) {
+    // Both on black
+    moveForward();
+    lostSince = 0;
+    state = 0;
+
+  } else if (l && !r) {
+    // Line is toward the left -> steer left
+    turnLeft();
+    lastDir = DIR_LEFT;
+    lostSince = 0;
+    state = 1;
+
+  } else if (!l && r) {
+    // Line is toward the right -> steer right
+    turnRight();
+    lastDir = DIR_RIGHT;
+    lostSince = 0;
+    state = 2;
+
+  } else {
+    // Both sensors on white
+    if (!SENSORS_ON_TAPE) {
+      moveForward();          // tape is between the sensors
+      lostSince = 0;
+      state = 6;
+    } else {
+      // Line lost -> pivot toward where it was last seen
+      if (lostSince == 0) lostSince = millis();
+
+      if (lastDir == DIR_NONE || millis() - lostSince > LOST_TIMEOUT) {
+        stopMotors();
+        state = 5;
+      } else if (lastDir == DIR_LEFT) {
+        pivotLeft();
+        state = 3;
+      } else {
+        pivotRight();
+        state = 4;
+      }
+    }
+  }
+
+  // Print only when the state changes
+  static int lastState = -1;
+  if (state != lastState) {
+    lastState = state;
+    Serial.print("L:");
+    Serial.print(l);
+    Serial.print(" R:");
+    Serial.print(r);
+    Serial.print(" -> ");
+    switch (state) {
+      case 0: Serial.println("FORWARD"); break;
+      case 1: Serial.println("TURN LEFT"); break;
+      case 2: Serial.println("TURN RIGHT"); break;
+      case 3: Serial.println("LOST - SEARCH LEFT"); break;
+      case 4: Serial.println("LOST - SEARCH RIGHT"); break;
+      case 5: Serial.println("LOST - STOPPED"); break;
+      case 6: Serial.println("BOTH WHITE - FORWARD"); break;
+    }
+  }
+
+  delay(5);
+}
