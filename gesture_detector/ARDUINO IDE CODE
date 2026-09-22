@@ -6,8 +6,8 @@
 #include <Adafruit_SSD1306.h>
 
 // ---------- USER CONFIG ----------
-const char* WIFI_SSID     = "realmeGT7";
-const char* WIFI_PASSWORD = "qwerrewq00";
+const char* WIFI_SSID     = "wifi-ssid";
+const char* WIFI_PASSWORD = "wifi-password";
 
 #define SERVO_PIN     2
 #define OLED_SDA_PIN  8
