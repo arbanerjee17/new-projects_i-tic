@@ -1,0 +1,191 @@
+// =====================================================
+// ESP32-C6 JOYSTICK CONTROLLED ROBOT (v3 - simple mode)
+// Analog joystick module + L298 Motor Driver
+// No sensors used.  (Arduino-ESP32 core 3.x)
+// =====================================================
+
+// ---------- JOYSTICK PINS ----------
+const int JOY_X  = 2;    // VRx -> GPIO 2
+const int JOY_Y  = 3;    // VRy -> GPIO 3
+const int JOY_SW = 7;   // SW  -> GPIO 7or10 (button, optional)
+
+// ---------- L298 MOTOR DRIVER PINS ----------
+// Physical LEFT motor (driver channel B)
+const int L_EN  = 23;
+const int L_IN1 = 20;
+const int L_IN2 = 21;
+
+// Physical RIGHT motor (driver channel A)
+const int R_EN  = 22;
+const int R_IN1 = 19;
+const int R_IN2 = 18;
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+const bool LEFT_MOTOR_REVERSED  = true;
+const bool RIGHT_MOTOR_REVERSED = false;
+
+// Joystick resting values, measured from YOUR Serial Monitor
+// (stick untouched). Update these if the resting readings change.
+const int CENTER_X = 2350;
+const int CENTER_Y = 2368;
+
+// How far the stick must move from centre before the bot reacts
+const int DEADZONE = 600;
+
+// Flip these if a direction is wrong
+const bool SWAP_XY  = false;   // true if up/down and left/right are swapped
+const bool INVERT_X = false;   // true if pushing right makes it turn left
+const bool INVERT_Y = false;   // true if pushing forward makes it go backward
+
+int slowDrive = 150;   // forward/back speed in SLOW mode (0-255)
+int slowTurn  = 130;   // spin speed in SLOW mode
+int fastDrive = 230;   // forward/back speed in FAST mode
+int fastTurn  = 200;   // spin speed in FAST mode
+bool fastMode = false; // joystick button toggles this
+
+// =====================================================
+// MOTOR CONTROL
+// speed: -255 (full reverse) to +255 (full forward)
+// =====================================================
+
+void driveMotor(int inA, int inB, int en, int speed) {
+  speed = constrain(speed, -255, 255);
+
+  if (speed > 0) {
+    digitalWrite(inA, HIGH);
+    digitalWrite(inB, LOW);
+    analogWrite(en, speed);
+  } else if (speed < 0) {
+    digitalWrite(inA, LOW);
+    digitalWrite(inB, HIGH);
+    analogWrite(en, -speed);
+  } else {
+    digitalWrite(inA, LOW);
+    digitalWrite(inB, LOW);
+    analogWrite(en, 0);
+  }
+}
+
+void setLeftMotor(int speed) {
+  if (LEFT_MOTOR_REVERSED) speed = -speed;
+  driveMotor(L_IN1, L_IN2, L_EN, speed);
+}
+
+void setRightMotor(int speed) {
+  if (RIGHT_MOTOR_REVERSED) speed = -speed;
+  driveMotor(R_IN1, R_IN2, R_EN, speed);
+}
+
+void stopMotors() {
+  setLeftMotor(0);
+  setRightMotor(0);
+}
+
+int readAvg(int pin) {
+  long sum = 0;
+  for (int i = 0; i < 8; i++) sum += analogRead(pin);
+  return sum / 8;
+}
+
+// =====================================================
+// SETUP
+// =====================================================
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(L_EN, OUTPUT);
+  pinMode(L_IN1, OUTPUT);
+  pinMode(L_IN2, OUTPUT);
+  pinMode(R_EN, OUTPUT);
+  pinMode(R_IN1, OUTPUT);
+  pinMode(R_IN2, OUTPUT);
+  pinMode(JOY_SW, INPUT_PULLUP);
+
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  stopMotors();
+
+  Serial.println("Joystick Robot v3 started - SLOW mode");
+  Serial.println("Press the joystick button to toggle SLOW / FAST");
+  delay(1000);
+}
+
+// =====================================================
+// MAIN LOOP
+// =====================================================
+
+void loop() {
+  // ---- Speed mode button ----
+  static bool lastBtn = HIGH;
+  static unsigned long lastPress = 0;
+  bool btn = digitalRead(JOY_SW);
+  if (lastBtn == HIGH && btn == LOW && millis() - lastPress > 250) {
+    fastMode = !fastMode;
+    lastPress = millis();
+    Serial.println(fastMode ? "Mode: FAST" : "Mode: SLOW");
+  }
+  lastBtn = btn;
+
+  // ---- Read joystick ----
+  int pinSteer    = SWAP_XY ? JOY_Y : JOY_X;
+  int pinThrottle = SWAP_XY ? JOY_X : JOY_Y;
+
+  int rawSteer    = readAvg(pinSteer);
+  int rawThrottle = readAvg(pinThrottle);
+
+  int dx = rawSteer    - (SWAP_XY ? CENTER_Y : CENTER_X);
+  int dy = rawThrottle - (SWAP_XY ? CENTER_X : CENTER_Y);
+  if (INVERT_X) dx = -dx;
+  if (INVERT_Y) dy = -dy;
+
+  int driveSpd = fastMode ? fastDrive : slowDrive;
+  int turnSpd  = fastMode ? fastTurn  : slowTurn;
+
+  const char* action;
+
+  if (abs(dx) < DEADZONE && abs(dy) < DEADZONE) {
+    // Joystick untouched -> stop
+    stopMotors();
+    action = "STOP";
+
+  } else if (abs(dy) >= abs(dx)) {
+    // Mostly up or down
+    if (dy > 0) {
+      setLeftMotor(driveSpd);
+      setRightMotor(driveSpd);
+      action = "FORWARD";
+    } else {
+      setLeftMotor(-driveSpd);
+      setRightMotor(-driveSpd);
+      action = "BACKWARD";
+    }
+
+  } else {
+    // Mostly left or right -> spin on the spot
+    if (dx > 0) {
+      setLeftMotor(turnSpd);
+      setRightMotor(-turnSpd);
+      action = "RIGHT";
+    } else {
+      setLeftMotor(-turnSpd);
+      setRightMotor(turnSpd);
+      action = "LEFT";
+    }
+  }
+
+  // ---- Print status 5 times a second ----
+  static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 200) {
+    lastPrint = millis();
+    Serial.print("X:");      Serial.print(rawSteer);
+    Serial.print(" Y:");     Serial.print(rawThrottle);
+    Serial.print(" -> ");    Serial.println(action);
+  }
+
+  delay(10);
+}
