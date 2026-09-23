@@ -1,3 +1,34 @@
+/*
+  Gesture Controlled Door - ESP32-C6 side
+  --------------------------------------
+  Receives HTTP commands from a browser page running MediaPipe hand-gesture
+  detection, and:
+    - moves a servo (mimicking a door opening/closing)
+    - shows status ("Door Opened" / "Door Closed") on an SSD1306 OLED
+
+  LIBRARIES TO INSTALL (Arduino IDE -> Library Manager):
+    - ESP32Servo        by Kevin Harrington / John K. Bennett
+    - Adafruit SSD1306
+    - Adafruit GFX Library
+
+  BOARD:
+    Tools > Board > ESP32 Arduino > "ESP32C6 Dev Module"
+
+  WIRING (change pin numbers below if your board differs):
+    Servo signal  -> GPIO 2   (servo VCC -> 5V, GND -> GND. Use external
+                                5V supply if your servo draws more current
+                                than the board's 3.3V/5V pin can give)
+    OLED SDA      -> GPIO 6
+    OLED SCL      -> GPIO 7
+    OLED VCC      -> 3.3V
+    OLED GND      -> GND
+
+    NOTE: GPIO8 and GPIO9 are strapping pins on the ESP32-C6 (used to
+    select boot mode). Do NOT wire the OLED to those pins - an I2C
+    device's pull-ups there can prevent the board from booting normally.
+    GPIO6/7 are safe general-purpose pins.
+*/
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESP32Servo.h>
@@ -6,16 +37,16 @@
 #include <Adafruit_SSD1306.h>
 
 // ---------- USER CONFIG ----------
-const char* WIFI_SSID     = "wifi-ssid";
-const char* WIFI_PASSWORD = "wifi-password";
+const char* WIFI_SSID     = "WIFI-SSID";
+const char* WIFI_PASSWORD = "WIFI-PASSWORD";
 
 #define SERVO_PIN     2
-#define OLED_SDA_PIN  8
-#define OLED_SCL_PIN  9
+#define OLED_SDA_PIN  6
+#define OLED_SCL_PIN  7
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET    -1
-#define OLED_ADDR     0x3C   // most SSD1306 boards use 0x3C (some use 0x3D)
+#define OLED_ADDR     0x3D   // most SSD1306 boards use 0x3C (some use 0x3D)
 
 const int DOOR_OPEN_ANGLE   = 90;
 const int DOOR_CLOSED_ANGLE = 0;
@@ -55,6 +86,7 @@ void closeDoor() {
 
 // GET /door?state=open   or   GET /door?state=close
 void handleDoor() {
+  server.sendHeader("Access-Control-Allow-Origin", "*"); // allow browser JS to call this
   if (!server.hasArg("state")) {
     server.send(400, "text/plain", "missing 'state' param");
     return;
@@ -72,6 +104,7 @@ void handleDoor() {
 }
 
 void handleStatus() {
+  server.sendHeader("Access-Control-Allow-Origin", "*"); // allow browser JS to call this
   server.send(200, "application/json",
               String("{\"door\":\"") + (doorOpen ? "open" : "closed") + "\"}");
 }
@@ -115,7 +148,7 @@ void setup() {
   server.on("/status", handleStatus);
   server.begin();
   Serial.println("HTTP server started");
-  Serial.println("Use this IP in gesture_detector.py -> ESP32_IP");
+  Serial.println("Use this IP in gesture_detector.html -> ESP32-C6 IP address box");
 }
 
 void loop() {
