@@ -17,13 +17,13 @@ Jumper wires, breadboard
 A laptop/PC with a webcam and a browser (Chrome or Edge recommended), on the same WiFi network as the ESP32-C6
 Wiring
 Component	ESP32-C6 Pin
-Servo signal	GPIO 2
-Servo VCC	5V (external supply recommended)
-Servo GND	GND
-OLED SDA	GPIO 8
-OLED SCL	GPIO 9
-OLED VCC	3.3V
-OLED GND	GND
+Servo signal	- GPIO 2
+Servo VCC	- 5V (external supply recommended)
+Servo GND	- GND
+OLED SDA	- GPIO 6
+OLED SCL	- GPIO 7
+OLED VCC	- 3.3V
+OLED GND	- GND
 
 (Pin numbers are set at the top of esp32c6_gesture_door.ino — change them there if your board's silkscreen differs.)
 
