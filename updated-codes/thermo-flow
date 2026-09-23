@@ -1,0 +1,75 @@
+#include <DHT.h>
+
+//========================
+// Pin Definitions
+//========================
+#define DHTPIN      4
+#define DHTTYPE     DHT11
+#define RELAY_PIN   18
+
+//========================
+// Temperature Threshold
+//========================
+const float TEMP_THRESHOLD = 35.0;   // change as needed
+
+//========================
+// Objects
+//========================
+DHT dht(DHTPIN, DHTTYPE);
+
+//========================
+// Setup
+//========================
+void setup()
+{
+  Serial.begin(115200);
+
+  dht.begin();
+
+  pinMode(RELAY_PIN, OUTPUT);
+
+  // Relay OFF (Active LOW Relay)
+  digitalWrite(RELAY_PIN, HIGH);
+
+  Serial.println("ThermoFlow Initializing...");
+  delay(2000);
+}
+
+//========================
+// Main Loop
+//========================
+void loop()
+{
+  float temperature = dht.readTemperature();
+
+  if (isnan(temperature))
+  {
+    Serial.println("DHT11 Error - Sensor not responding");
+    delay(2000);
+    return;
+  }
+
+  bool fanState = (temperature >= TEMP_THRESHOLD);
+
+  // Relay Control
+  if (fanState)
+  {
+    digitalWrite(RELAY_PIN, LOW);   // Relay ON (Active LOW)
+  }
+  else
+  {
+    digitalWrite(RELAY_PIN, HIGH);  // Relay OFF
+  }
+
+  // Serial Monitor
+  Serial.print("Temperature : ");
+  Serial.print(temperature);
+  Serial.print(" C");
+
+  if(fanState)
+    Serial.println(" | FAN ON");
+  else
+    Serial.println(" | FAN OFF");
+
+  delay(2000);
+}
