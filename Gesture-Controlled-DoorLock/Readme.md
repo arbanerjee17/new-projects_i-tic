@@ -17,12 +17,24 @@ Jumper wires, breadboard
 A laptop/PC with a webcam and a browser (Chrome or Edge recommended), on the same WiFi network as the ESP32-C6
 Wiring
 
-Servo signal	- GPIO 2,
-Servo VCC	- 5V (external supply recommended),Servo GND	- GND
-OLED SDA	- GPIO 6,
-OLED SCL	- GPIO 7,
-OLED VCC	- 3.3V,
-OLED GND	- GND
+
+Component / Connection
+Pin / Target
+Servo signal
+GPIO 2
+Servo VCC
+5V (external supply recommended)
+Servo GND
+GND
+OLED SDA
+GPIO 6
+OLED SCL
+GPIO 7
+OLED VCC
+3.3V
+OLED GND
+GND
+
 
 (Pin numbers are set at the top of esp32c6_gesture_door.ino — change them there if your board's silkscreen differs.)
 
@@ -70,4 +82,3 @@ OLED shows nothing: double-check SDA/SCL wiring and the I2C address (0x3C is use
 Servo jitters or resets the board: the 3.3V/5V pin on the ESP32-C6 usually can't supply enough current — power the servo from a separate 5V source and share GND with the board.
 Serial Monitor is blank: enable Tools → USB CDC On Boot as described in step 1.3 above, then re-upload.
 ESP32 IP changed since last time: your router may reassign DHCP leases. Re-check Serial Monitor for the current IP, or set a static IP / DHCP reservation for the board.
-****
