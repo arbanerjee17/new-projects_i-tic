@@ -1,84 +1,281 @@
-Gesture Controlled Door — ESP32-C6 + Servo + OLED (Browser Version)
+# Gesture Controlled Door — ESP32-C6 + Servo + OLED
 
-<img width="1882" height="834" alt="image" src="https://github.com/user-attachments/assets/0deee18c-b2fc-4caa-86a3-c27a6a5ab94f" />
+![Gesture Controlled Door](https://github.com/user-attachments/assets/0deee18c-b2fc-4caa-86a3-c27a6a5ab94f)
 
+A browser-based gesture-controlled door system using an **ESP32-C6, SG90 servo, and SSD1306 OLED display**. A webcam detects hand gestures using **MediaPipe directly in the browser**. An **open palm** opens the door, while a **fist** closes it. The command is sent over Wi-Fi to the ESP32-C6 using HTTP.
 
-A webcam in your browser watches your hand using MediaPipe (runs entirely in-browser, no installs). Open palm → door opens. Fist → door closes. The command travels over WiFi (HTTP) to the ESP32-C6, which drives the servo (mimicking the door) and updates the OLED with "Door Opened" / "Door Closed".
+## Features
 
-Files
-File	Runs where	Purpose
-esp32c6_gesture_door.ino	ESP32-C6 (Arduino IDE)	WiFi web server, servo control, OLED display
-gesture_detector.html	Your browser	Webcam + MediaPipe gesture detection, sends commands
-Parts
-ESP32-C6 dev board
-SG90 (or similar) servo motor
-SSD1306 OLED display (128x64, I2C)
-Jumper wires, breadboard
-A laptop/PC with a webcam and a browser (Chrome or Edge recommended), on the same WiFi network as the ESP32-C6
-Wiring
+* ✋ Open palm → Door opens
+* ✊ Fist → Door closes
+* 📷 Browser-based webcam gesture detection
+* 🧠 MediaPipe Hand Landmarker
+* 📡 Wi-Fi communication using HTTP
+* ⚙️ ESP32-C6 controls the servo
+* 🖥️ OLED displays the current door status
+* 🌐 No Python or additional software required for gesture detection
 
+---
 
-Component / Connection
-Pin / Target
-Servo signal
-GPIO 2
-Servo VCC
-5V (external supply recommended)
-Servo GND
-GND
-OLED SDA
-GPIO 6
-OLED SCL
-GPIO 7
-OLED VCC
-3.3V
-OLED GND
-GND
+## Files
 
+| File                       | Runs On                | Purpose                                            |
+| -------------------------- | ---------------------- | -------------------------------------------------- |
+| `esp32c6_gesture_door.ino` | ESP32-C6 / Arduino IDE | Wi-Fi web server, servo control and OLED display   |
+| `gesture_detector.html`    | Web Browser            | Webcam access, gesture detection and HTTP commands |
 
-(Pin numbers are set at the top of esp32c6_gesture_door.ino — change them there if your board's silkscreen differs.)
+---
 
-1. Flash the ESP32-C6
-In Arduino IDE, install these libraries (Sketch → Include Library → Manage Libraries):
-ESP32Servo
-Adafruit SSD1306
-Adafruit GFX Library
-Install the ESP32 boards package (Espressif) if you haven't, then select Tools → Board → ESP32 Arduino → ESP32C6 Dev Module.
-If Serial Monitor shows nothing after uploading: Tools → USB CDC On Boot → Enabled, then re-upload. The C6 uses native USB, so this setting is required to see any Serial output.
-Open esp32c6_gesture_door.ino and edit:
-cpp
-   const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-   const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-Upload. Open the Serial Monitor (115200 baud) — once connected it prints something like:
-   Connected! IP address: 10.83.156.53
+## Components Required
 
-Note that IP address down — you'll need it in the browser page.
+* ESP32-C6 development board
+* SG90 or similar servo motor
+* SSD1306 OLED display — 128×64, I2C
+* Jumper wires
+* Breadboard
+* External 5V power supply for servo *(recommended)*
+* Laptop/PC with webcam
+* Chrome or Edge browser
+* Wi-Fi network
 
-2. Run the browser gesture detector
+---
 
-No Python, no pip, nothing to install on your PC — just a local web server so the browser allows camera access.
+## Hardware Connections
 
-In VS Code, install the Live Server extension (Extensions icon → search "Live Server" by Ritwick Dey → Install).
-Right-click gesture_detector.html in the Explorer panel → Open with Live Server. It opens in your browser at something like http://127.0.0.1:5500/gesture_detector.html.
-Allow camera access when the browser prompts you.
-In the page's "ESP32-C6 IP address" box, enter the IP from Serial Monitor (e.g. 10.83.156.53).
-Click Test connection first — you should see something like OK: {"door":"closed"} in the log box.
-Click Start Camera, then show an open palm to open the door or make a fist to close it.
+| Component        | Pin / Connection        |
+| ---------------- | ----------------------- |
+| **Servo Signal** | ESP32-C6 GPIO 2         |
+| **Servo VCC**    | 5V / External 5V supply |
+| **Servo GND**    | GND                     |
+| **OLED SDA**     | ESP32-C6 GPIO 6         |
+| **OLED SCL**     | ESP32-C6 GPIO 7         |
+| **OLED VCC**     | 3.3V                    |
+| **OLED GND**     | GND                     |
 
-Double-clicking the HTML file directly (file:// in the address bar) often fails to get camera permission — always use Live Server (or any local web server) instead.
+> **Note:** Pin numbers are defined at the beginning of `esp32c6_gesture_door.ino`. They can be changed if your ESP32-C6 board uses different GPIO connections.
 
-How it works
-ESP32-C6 runs a tiny HTTP server with two endpoints:
-GET /door?state=open → servo moves to 90°, OLED shows "Door Opened"
-GET /door?state=close → servo moves to 0°, OLED shows "Door Closed"
-GET /status → returns current door state as JSON
-Responses include an Access-Control-Allow-Origin: * header so the browser page (a different origin) is allowed to call them (CORS).
-The HTML page loads Google's MediaPipe Hand Landmarker model from a CDN and runs it on each webcam frame, entirely client-side.
-It counts extended fingers from the hand landmarks each frame, and — with a 1.5s cooldown to avoid spamming — calls fetch() on the matching ESP32 endpoint when the gesture changes.
-Troubleshooting
-"Test connection" fails / fetch error in log: confirm your PC and the ESP32 are on the same WiFi network/subnet. Also make sure you re-flashed the .ino version that includes the CORS header — an older upload without it will get silently blocked by the browser.
-Camera won't start: make sure you're using Live Server (not opening the file directly), and that you clicked "Allow" on the browser's permission prompt. Check no other app (Zoom, Teams, etc.) is already using the webcam.
-OLED shows nothing: double-check SDA/SCL wiring and the I2C address (0x3C is used by default in the sketch; try 0x3D if your module needs it).
-Servo jitters or resets the board: the 3.3V/5V pin on the ESP32-C6 usually can't supply enough current — power the servo from a separate 5V source and share GND with the board.
-Serial Monitor is blank: enable Tools → USB CDC On Boot as described in step 1.3 above, then re-upload.
-ESP32 IP changed since last time: your router may reassign DHCP leases. Re-check Serial Monitor for the current IP, or set a static IP / DHCP reservation for the board.
+> **Servo Power:** A separate 5V supply is recommended for the servo. If an external supply is used, make sure its **GND is connected to the ESP32-C6 GND**.
+
+---
+
+# Setup
+
+## 1. Flash the ESP32-C6
+
+Open `esp32c6_gesture_door.ino` in **Arduino IDE**.
+
+Install the following libraries through:
+
+**Sketch → Include Library → Manage Libraries**
+
+* `ESP32Servo`
+* `Adafruit SSD1306`
+* `Adafruit GFX Library`
+
+Also install the **ESP32 Arduino board package** by Espressif if it is not already installed.
+
+Select:
+
+**Tools → Board → ESP32 Arduino → ESP32C6 Dev Module**
+
+### Configure Wi-Fi
+
+Open the `.ino` file and enter your Wi-Fi credentials:
+
+```cpp
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+```
+
+Upload the code to the ESP32-C6.
+
+Open **Serial Monitor** at **115200 baud**.
+
+After connecting to Wi-Fi, the ESP32-C6 will display its IP address, for example:
+
+```text
+Connected! IP address: 10.83.156.53
+```
+
+**Note down this IP address.** It will be required in the browser.
+
+### If Serial Monitor is blank
+
+Go to:
+
+**Tools → USB CDC On Boot → Enabled**
+
+Then re-upload the code.
+
+---
+
+# 2. Run the Browser Gesture Detector
+
+The gesture detector runs directly in the browser, so **Python, pip, or any additional installation is not required**.
+
+A local web server is needed so that the browser can access the webcam.
+
+### Using VS Code
+
+1. Open the project folder in VS Code.
+2. Install the **Live Server** extension by **Ritwick Dey**.
+3. Right-click `gesture_detector.html`.
+4. Select **Open with Live Server**.
+
+The page will open at an address similar to:
+
+```text
+http://127.0.0.1:5500/gesture_detector.html
+```
+
+Allow camera access when prompted.
+
+Enter the **ESP32-C6 IP address** shown in the Serial Monitor.
+
+For example:
+
+```text
+10.83.156.53
+```
+
+Click **Test Connection**.
+
+A successful connection should show something similar to:
+
+```text
+OK: {"door":"closed"}
+```
+
+Click **Start Camera** and perform the gestures:
+
+| Gesture     | Action     |
+| ----------- | ---------- |
+| ✋ Open Palm | Open Door  |
+| ✊ Fist      | Close Door |
+
+> **Important:** Do not simply double-click the HTML file. Opening it using `file://` may prevent the browser from accessing the webcam. Use **Live Server** or another local web server.
+
+---
+
+# How It Works
+
+The system consists of two main parts:
+
+### Browser
+
+The browser uses **MediaPipe Hand Landmarker** to process the webcam feed.
+
+```text
+Webcam
+   ↓
+MediaPipe
+   ↓
+Hand Gesture Detection
+   ↓
+HTTP Request
+   ↓
+ESP32-C6
+```
+
+The gesture detector identifies the user's hand and sends an HTTP request when the detected gesture changes.
+
+### ESP32-C6
+
+The ESP32-C6 runs a small HTTP server with the following endpoints:
+
+| Endpoint                | Function                                      |
+| ----------------------- | --------------------------------------------- |
+| `GET /door?state=open`  | Moves servo to 90° and displays "Door Opened" |
+| `GET /door?state=close` | Moves servo to 0° and displays "Door Closed"  |
+| `GET /status`           | Returns the current door state as JSON        |
+
+The ESP32-C6 also includes a **CORS header** so that the browser-based application can communicate with it from a different origin.
+
+A **1.5-second cooldown** is used by the browser application to prevent repeated commands from being sent continuously.
+
+---
+
+# Troubleshooting
+
+### Test Connection fails
+
+* Make sure the PC and ESP32-C6 are connected to the **same Wi-Fi network**.
+* Check the IP address in Serial Monitor.
+* Make sure the latest `.ino` code containing the CORS header has been uploaded.
+
+### Camera does not start
+
+* Use **Live Server** instead of opening the HTML file directly.
+* Allow camera permission in the browser.
+* Close applications such as Zoom or Teams that may already be using the webcam.
+
+### OLED does not display anything
+
+Check:
+
+* SDA → GPIO 6
+* SCL → GPIO 7
+* VCC → 3.3V
+* GND → GND
+
+The default I2C address is:
+
+```text
+0x3C
+```
+
+If the display does not work, try:
+
+```text
+0x3D
+```
+
+### Servo jitters or ESP32-C6 resets
+
+The servo may be drawing more current than the ESP32-C6 power supply can provide.
+
+Use a **separate regulated 5V supply** for the servo and connect the external supply's **GND to ESP32-C6 GND**.
+
+### Serial Monitor is blank
+
+Enable:
+
+**Tools → USB CDC On Boot → Enabled**
+
+Then upload the firmware again.
+
+### ESP32-C6 IP address has changed
+
+The router may assign a different IP address through DHCP.
+
+Check the **Serial Monitor** for the latest IP address and enter that address in the browser application.
+
+---
+
+## System Overview
+
+```text
+              ┌──────────────────┐
+              │   Laptop / PC     │
+              │     Webcam        │
+              └────────┬─────────┘
+                       │
+                       ▼
+              ┌──────────────────┐
+              │    MediaPipe     │
+              │ Gesture Detection│
+              └────────┬─────────┘
+                       │ HTTP / Wi-Fi
+                       ▼
+              ┌──────────────────┐
+              │    ESP32-C6      │
+              │   HTTP Server    │
+              └───────┬───┬──────┘
+                      │   │
+             ┌────────┘   └─────────┐
+             ▼                       ▼
+        ┌──────────┐           ┌──────────┐
+        │   Servo  │           │   OLED   │
+        │ Door Lock│           │  Status  │
+        └──────────┘           └──────────┘
+```
